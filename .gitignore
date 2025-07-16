@@ -1,0 +1,5 @@
+data_proccess/*
+__pycache__
+log/unet/*
+data/*
+checkpoints/*
