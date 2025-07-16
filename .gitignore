@@ -1,5 +1,7 @@
-data_proccess/*
+data_proccess
 __pycache__
-log/unet/*
-data/*
-checkpoints/*
+log/*
+data
+checkpoints/* 
+
+!{*.py}

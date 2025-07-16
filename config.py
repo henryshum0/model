@@ -3,7 +3,7 @@ import os
 import setproctitle
 from datetime import datetime
 
-from data_proccess import data_generation as D
+from data import data_generation as D
 
 class Config:
     load = False
@@ -26,7 +26,7 @@ class Config:
     mask_test_dir = 'data/crop_msk_test'
     
     #checkpoint paths
-    checkpoint_path = f'checkpoints/{model}/{now}/'
+    checkpoint_path = f'checkpoints/{model}/{now}'
     
     #logger paths
     log_dir = f'log/{model}/{now}'
@@ -63,6 +63,7 @@ class Config:
     test_batch_size = 1
     
     val_after_epoch = 1 # Validate after every n epochs
+    save_after_epoch = 1 # save after every n epochs
     #/// training settings ///
     
     #<-- loss settings -->

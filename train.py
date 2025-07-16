@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-
-from crack_dataset import CrackDataset
+from pathlib import Path
+from data.crack_dataset import CrackDataset
 from config import Config as cfg
 from models.unet import UNet
 import trainers, loss
@@ -37,6 +37,11 @@ def main():
     
     # 3. start training
     global_step = 0
+    
+    # create checkpoint directory if it doesn't exist
+    checkpoint_save  = Path(cfg.checkpoint_path)
+    checkpoint_save.mkdir(parents=True, exist_ok=True)
+    
     for epoch in range(1, cfg.epoch+1):
         epoch_loss = 0.0
         print(f"Epoch {epoch}/{cfg.epoch}")
@@ -96,7 +101,11 @@ def main():
                     pbar.close()
         avg_val_loss = val_loss / len(loader_val)
         logger.add_scalar('val/epoch_loss', avg_val_loss, epoch)
-    
+
+        #save the model checkpoint
+        if epoch % cfg.save_after_epoch == 0:
+            torch.save(model.state_dict(), f"{cfg.checkpoint_path}/epoch_{epoch}.pth")
+            print(f"Model saved at {cfg.checkpoint_path}/epoch_{epoch}.pth")
         
 def get_datasets():
     dataset_train = CrackDataset(
