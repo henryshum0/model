@@ -53,6 +53,10 @@ class CrackDataset(Dataset):
             'image': torch.from_numpy(image),
             'mask': torch.from_numpy(mask)
         }
+        
+    def get_n_classes(self):
+        # Assuming binary segmentation, return 1 class for the crack
+        return 1
     
 if __name__ == "__main__":
     

@@ -19,11 +19,14 @@ def main():
     print(f"Training batch size: {loader_train.batch_size}")
     print(f"Validation batch size: {loader_val.batch_size}")
     
+    assert dataset_train.get_n_classes() == dataset_val.get_n_classes(), \
+        "Number of classes in training and validation datasets must match."
+        
     # 2.Get the model, optimizer, scheduler, loss criterion, and trainer
     if cfg.load:
         pass
     else:
-        model = get_model().to(device)
+        model = get_model(dataset_train.get_n_classes()).to(device)
         logger = get_logger()
         optimizer = get_optimizer(model)
         scheduler = get_scheduler(optimizer)
@@ -144,12 +147,12 @@ def get_loaders(dataset_tr, dataset_val):
     
     return dataloader_tr, dataloader_val
     
-def get_model():
+def get_model(n_classes=1):
     choice_model = cfg.model.lower()
     model = None
     if choice_model == 'unet':
         print(f"using model UNet")
-        model = UNet(n_channels=3, n_classes=1, bilinear=False)
+        model = UNet(n_channels=3, n_classes=n_classes, bilinear=False)
     elif choice_model == 'deepcrack':
         raise NotImplementedError("not supported yet")
     elif choice_model == 'attention_unet':

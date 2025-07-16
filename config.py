@@ -58,9 +58,9 @@ class Config:
     epoch = 500
     pretrained_model = ''  # Path to the pretrained model
     lr = 1e-4
-    train_batch_size = 1
+    train_batch_size = 4
     val_batch_size = 4
-    test_batch_size = 1
+    test_batch_size = 4
     
     val_after_epoch = 1 # Validate after every n epochs
     save_after_epoch = 1 # save after every n epochs
