@@ -1,7 +1,6 @@
 data_proccess
 __pycache__
 log/*
-data
 checkpoints/* 
-
-!{*.py}
+data/*
+!*.py
