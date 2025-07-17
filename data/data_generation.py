@@ -5,6 +5,166 @@ from random import randint
 from pathlib import Path
 import os
 
+class DataGenPipeline():
+    def __init__(self, save:bool=False, load:bool=False, transforms=[], img_ld_dir:str='', mask_ld_dir:str='', 
+                 img_save_dir:str='', mask_save_dir:str='', count:int=1, 
+                 mask_suffix:str='', save_prefix:str='', save_suffix:str='', save_mask_suffix:str='', start_idx:int=0):
+        '''
+        if both save and load are true, pipeline processes all images and masks in the directories
+        and saves them to the save directories, then sets load and save to False. Then it acts
+        like a generator, yielding processed images and masks.
+        if only load is true, pipeline acts like a generator, yielding processed images and masks.
+        if only save is true, pipeline applies transformations and saves the processed images and masks
+        to the save directories, then increments the id for the next save.
+        
+        Args:
+            save (bool): Whether to save the processed images and masks.
+            load (bool): Whether to load and process images and masks from the directories.
+            transforms (list): List of transformations to apply to the images and masks.
+            img_ld_dir (str): Directory to load images from.
+            mask_ld_dir (str): Directory to load masks from.
+            img_save_dir (str): Directory to save processed images to.
+            mask_save_dir (str): Directory to save processed masks to.
+            count (int):Number of times of looping through images to generate data.
+                        only applicable when load is true.
+            mask_suffix (str):  Suffix to append to the mask filenames when loading. 
+                                example: img: "MyData_1.png", mask: "MyData_1_GT.png", herer "_GT" is the suffix.
+            save_prefix (str): Prefix to prepend to the saved image and mask filenames.
+            save_suffix (str): Suffix to append to the saved image and mask filenames.
+            save_mask_suffix (str): Suffix to append to the saved mask filenames.
+                                    example: img: "save_1_aug.png", mask: "save_1_aug_GT.png", here "_GT" is the save_mask_suffix. 
+        '''
+        
+        if load:
+            self.img_ld_dir = Path(img_ld_dir)
+            self.mask_ld_dir = Path(mask_ld_dir)
+            if not self.img_ld_dir.exists():
+                raise FileNotFoundError(f"Image load directory {self.img_ld_dir} does not exist.")
+            if not self.mask_ld_dir.exists():
+                raise FileNotFoundError(f"Mask load directory {self.mask_ld_dir} does not exist.")
+        # if transforms is None or not isinstance(transforms, list) or transforms == []: 
+        #     raise ValueError("Transforms must be a non-empty list of callable transformations.")
+            
+            
+        if save:
+            if (img_save_dir is None or img_save_dir =='' 
+                or mask_save_dir is None or mask_save_dir == ''):
+                img_save_dir = img_ld_dir + "/processed_imgs"
+                mask_save_dir = mask_ld_dir + "/processed_masks"
+            self.img_save_dir = Path(img_save_dir)
+            self.mask_save_dir = Path(mask_save_dir)
+            self.img_save_dir.mkdir(parents=True, exist_ok=True)
+            self.mask_save_dir.mkdir(parents=True, exist_ok=True)
+            
+        self.load = load
+        self.save = save
+        self.transforms = transforms
+        self.id = start_idx
+        self.count = count
+        self.mask_suffix = mask_suffix
+        self.save_prefix = save_prefix
+        self.save_suffix = save_suffix
+        self.save_mask_suffix = save_mask_suffix
+
+    def __call__(self, image=None, mask=None):
+        #case: when both load and save are true, pipeline processes all images and masks in the directories
+        #and saves them to the save directories, then sets load and save to False
+        if self.load and self.save and image is None and mask is None:
+            for transformed, _ in self.load_transfrom_data():
+                img, msk = transformed
+                self.save_data(img, msk)
+            self.save = False
+            self.load = False
+            return True
+        
+        #case: when load is true, pipeline acts like a generator, yielding processed images and masks
+        elif self.load:
+            return self.load_transfrom_data()
+        
+        elif image is None or mask is None: 
+            raise ValueError("Image and mask must be provided for processing.")
+        
+        #case: when save is true, pipeline applies transformations and saves the processed images and masks
+        #to the save directories, then increments the id for the next save
+        elif self.save :
+            image, mask = self.apply_transforms(image, mask)
+            self.save_data(image, mask)
+            return True
+        
+        #case: only when image and mask are specified, pipeline applies transformations
+        else:
+            if not isinstance(image, np.ndarray) or not isinstance(mask, np.ndarray):
+                raise TypeError("Image and mask must be numpy arrays.")
+            if image.ndim != 3 or mask.ndim != 2:
+                raise ValueError(f"Image must be a 3D array (H, W, C), but got {image.ndim}D. Mask must be a 2D array (H, W), but got {mask.ndim}D.")
+            if image.shape[2] != 3:
+                raise ValueError(f"Image must have 3 channels (RGB), but got {image.shape[2]} channels.")
+            if image.shape[:2] != mask.shape:
+                raise ValueError(f"Image and mask must have the same dimensions, but got {image.shape[:2]} and {mask.shape}.")
+            return self.apply_transforms(image, mask)
+    
+    def apply_transforms(self, image, mask):
+        for transform in self.transforms:
+            image, mask = transform(image, mask)
+        return image, mask
+    
+    def save_data(self, image, mask):
+        assert self.img_save_dir is not None or self.img_save_dir != "", "Image save directory is not specified."
+        assert self.mask_save_dir is not None or self.mask_save_dir != "", "Mask save directory is not specified."
+        
+        if self.save and isinstance(image, np.ndarray) and isinstance(mask, np.ndarray):
+            assert image.shape[2] == 3, f"Image must have 3 channels (RGB), but got {image.shape[2]} channels"
+            assert mask.ndim == 2, f"Mask must be a 2D array {mask.ndim}D, but got {mask.shape}"
+            assert image.shape[:2] == mask.shape, f"Image and mask must have the same dimensions, but got {image.shape[:2]} and {mask.shape}"
+            img_path = self.img_save_dir / f"{self.save_prefix}{self.id}{self.save_suffix}.png"
+            mask_path = self.mask_save_dir / f"{self.save_prefix}{self.id}{self.save_suffix}{self.save_mask_suffix}.png"
+            cv2.imwrite(str(img_path), image)
+            mask = (mask / 255).astype(np.uint8)*255  # Ensure mask is in the correct format
+            cv2.imwrite(str(mask_path), mask)
+            print(f"Saved {img_path} and {mask_path}")
+            print(f"Image shape: {image.shape}, Mask shape: {mask.shape}")
+            self.id += 1
+        
+        elif self.save and isinstance(image, list) and isinstance(mask, list):
+            for i, (img, msk) in enumerate(zip(image, mask)):
+                assert img.shape[2] == 3, f"Image must have 3 channels (RGB), but got {img.shape[2]} channels"
+                assert msk.ndim == 2, f"Mask must be a 2D array {msk.ndim}D, but got {msk.shape}"
+                assert img.shape[:2] == msk.shape, f"Image and mask must have the same dimensions, but got {img.shape[:2]} and {msk.shape}"
+                img_path = self.img_save_dir / f"{self.save_prefix}{self.id + i}{self.save_suffix}.png"
+                mask_path = self.mask_save_dir / f"{self.save_prefix}{self.id + i}{self.save_suffix}{self.save_mask_suffix}.png"
+                cv2.imwrite(str(img_path), img)
+                msk = (msk / 255).astype(np.uint8)*255
+                cv2.imwrite(str(mask_path), msk)
+            print(f"saved images id from {self.id} to {self.id + len(image) - 1}")
+            self.id += len(image)
+            
+        elif not self.save:
+            raise RuntimeError("Save mode is not enabled. Cannot save data.")
+        else:
+            raise RuntimeError("image or mask is not a numpy array or list.")
+        
+    def load_transfrom_data(self):
+        if self.load:
+            img_files = []
+            mask_files = []
+            for ext in ["png", "jpg", "jpeg", "JPG", "JPEG", "PNG"]:
+                img_files.extend(self.img_ld_dir.glob(f"*.{ext}"))
+                mask_files.extend(self.mask_ld_dir.glob(f"*.{ext}"))
+            if len(img_files) != len(mask_files):
+                raise ValueError("Number of input images and masks do not match." f"{len(img_files)} images and {len(mask_files)} masks found.")
+            while self.count > 0:
+                for img_file in img_files:
+                    image = cv2.imread(str(img_file))
+                    mask_file = self.mask_ld_dir / (img_file.stem + self.mask_suffix + ".png")
+                    # print(f"Loading {img_file} and {mask_file}")
+                    mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
+                    mask = (mask / 255).round().astype(np.uint8) * 255  # Ensure mask is in the correct format
+                    # print(f"Image shape: {image.shape}, Mask shape: {mask.shape}")
+                    yield self.apply_transforms(image, mask), (img_file, mask_file)
+                self.count -= 1
+        else:
+            raise RuntimeError("Load mode is not enabled. Cannot load data.")
+        
 class Resize():
     """
     Resize the image and mask to a specified size.
@@ -206,167 +366,6 @@ class SlideCrop():
                 crop_masks.append(cropped_mask)
         return crop_images, crop_masks
     
-class DataGenPipeline():
-    def __init__(self, save:bool=False, load:bool=False, transforms=[], img_ld_dir:str='', mask_ld_dir:str='', 
-                 img_save_dir:str='', mask_save_dir:str='', count:int=1, 
-                 mask_suffix:str='', save_prefix:str='', save_suffix:str='', save_mask_suffix:str='', start_idx:int=0):
-        '''
-        if both save and load are true, pipeline processes all images and masks in the directories
-        and saves them to the save directories, then sets load and save to False. Then it acts
-        like a generator, yielding processed images and masks.
-        if only load is true, pipeline acts like a generator, yielding processed images and masks.
-        if only save is true, pipeline applies transformations and saves the processed images and masks
-        to the save directories, then increments the id for the next save.
-        
-        Args:
-            save (bool): Whether to save the processed images and masks.
-            load (bool): Whether to load and process images and masks from the directories.
-            transforms (list): List of transformations to apply to the images and masks.
-            img_ld_dir (str): Directory to load images from.
-            mask_ld_dir (str): Directory to load masks from.
-            img_save_dir (str): Directory to save processed images to.
-            mask_save_dir (str): Directory to save processed masks to.
-            count (int):Number of times of looping through images to generate data.
-                        only applicable when load is true.
-            mask_suffix (str):  Suffix to append to the mask filenames when loading. 
-                                example: img: "MyData_1.png", mask: "MyData_1_GT.png", herer "_GT" is the suffix.
-            save_prefix (str): Prefix to prepend to the saved image and mask filenames.
-            save_suffix (str): Suffix to append to the saved image and mask filenames.
-            save_mask_suffix (str): Suffix to append to the saved mask filenames.
-                                    example: img: "save_1_aug.png", mask: "save_1_aug_GT.png", here "_GT" is the save_mask_suffix. 
-        '''
-        
-        if load:
-            self.img_ld_dir = Path(img_ld_dir)
-            self.mask_ld_dir = Path(mask_ld_dir)
-            if not self.img_ld_dir.exists():
-                raise FileNotFoundError(f"Image load directory {self.img_ld_dir} does not exist.")
-            if not self.mask_ld_dir.exists():
-                raise FileNotFoundError(f"Mask load directory {self.mask_ld_dir} does not exist.")
-        # if transforms is None or not isinstance(transforms, list) or transforms == []: 
-        #     raise ValueError("Transforms must be a non-empty list of callable transformations.")
-            
-            
-        if save:
-            if (img_save_dir is None or img_save_dir =='' 
-                or mask_save_dir is None or mask_save_dir == ''):
-                img_save_dir = img_ld_dir + "/processed_imgs"
-                mask_save_dir = mask_ld_dir + "/processed_masks"
-            self.img_save_dir = Path(img_save_dir)
-            self.mask_save_dir = Path(mask_save_dir)
-            self.img_save_dir.mkdir(parents=True, exist_ok=True)
-            self.mask_save_dir.mkdir(parents=True, exist_ok=True)
-            
-        self.load = load
-        self.save = save
-        self.transforms = transforms
-        self.id = start_idx
-        self.count = count
-        self.mask_suffix = mask_suffix
-        self.save_prefix = save_prefix
-        self.save_suffix = save_suffix
-        self.save_mask_suffix = save_mask_suffix
-
-    def __call__(self, image=None, mask=None):
-        #case: when both load and save are true, pipeline processes all images and masks in the directories
-        #and saves them to the save directories, then sets load and save to False
-        if self.load and self.save and image is None and mask is None:
-            for transformed, _ in self.load_transfrom_data():
-                img, msk = transformed
-                self.save_data(img, msk)
-            self.save = False
-            self.load = False
-            return True
-        
-        #case: when load is true, pipeline acts like a generator, yielding processed images and masks
-        elif self.load:
-            return self.load_transfrom_data()
-        
-        elif image is None or mask is None: 
-            raise ValueError("Image and mask must be provided for processing.")
-        
-        #case: when save is true, pipeline applies transformations and saves the processed images and masks
-        #to the save directories, then increments the id for the next save
-        elif self.save :
-            image, mask = self.apply_transforms(image, mask)
-            self.save_data(image, mask)
-            return True
-        
-        #case: only when image and mask are specified, pipeline applies transformations
-        else:
-            if not isinstance(image, np.ndarray) or not isinstance(mask, np.ndarray):
-                raise TypeError("Image and mask must be numpy arrays.")
-            if image.ndim != 3 or mask.ndim != 2:
-                raise ValueError(f"Image must be a 3D array (H, W, C), but got {image.ndim}D. Mask must be a 2D array (H, W), but got {mask.ndim}D.")
-            if image.shape[2] != 3:
-                raise ValueError(f"Image must have 3 channels (RGB), but got {image.shape[2]} channels.")
-            if image.shape[:2] != mask.shape:
-                raise ValueError(f"Image and mask must have the same dimensions, but got {image.shape[:2]} and {mask.shape}.")
-            return self.apply_transforms(image, mask)
-    
-    def apply_transforms(self, image, mask):
-        for transform in self.transforms:
-            image, mask = transform(image, mask)
-        return image, mask
-    
-    def save_data(self, image, mask):
-        assert self.img_save_dir is not None or self.img_save_dir != "", "Image save directory is not specified."
-        assert self.mask_save_dir is not None or self.mask_save_dir != "", "Mask save directory is not specified."
-        
-        if self.save and isinstance(image, np.ndarray) and isinstance(mask, np.ndarray):
-            assert image.shape[2] == 3, f"Image must have 3 channels (RGB), but got {image.shape[2]} channels"
-            assert mask.ndim == 2, f"Mask must be a 2D array {mask.ndim}D, but got {mask.shape}"
-            assert image.shape[:2] == mask.shape, f"Image and mask must have the same dimensions, but got {image.shape[:2]} and {mask.shape}"
-            img_path = self.img_save_dir / f"{self.save_prefix}{self.id}{self.save_suffix}.png"
-            mask_path = self.mask_save_dir / f"{self.save_prefix}{self.id}{self.save_suffix}{self.save_mask_suffix}.png"
-            cv2.imwrite(str(img_path), image)
-            mask = (mask / 255).astype(np.uint8)*255  # Ensure mask is in the correct format
-            cv2.imwrite(str(mask_path), mask)
-            print(f"Saved {img_path} and {mask_path}")
-            print(f"Image shape: {image.shape}, Mask shape: {mask.shape}")
-            self.id += 1
-        
-        elif self.save and isinstance(image, list) and isinstance(mask, list):
-            for i, (img, msk) in enumerate(zip(image, mask)):
-                assert img.shape[2] == 3, f"Image must have 3 channels (RGB), but got {img.shape[2]} channels"
-                assert msk.ndim == 2, f"Mask must be a 2D array {msk.ndim}D, but got {msk.shape}"
-                assert img.shape[:2] == msk.shape, f"Image and mask must have the same dimensions, but got {img.shape[:2]} and {msk.shape}"
-                img_path = self.img_save_dir / f"{self.save_prefix}{self.id + i}{self.save_suffix}.png"
-                mask_path = self.mask_save_dir / f"{self.save_prefix}{self.id + i}{self.save_suffix}{self.save_mask_suffix}.png"
-                cv2.imwrite(str(img_path), img)
-                msk = (msk / 255).astype(np.uint8)*255
-                cv2.imwrite(str(mask_path), msk)
-            print(f"saved images id from {self.id} to {self.id + len(image) - 1}")
-            self.id += len(image)
-            
-        elif not self.save:
-            raise RuntimeError("Save mode is not enabled. Cannot save data.")
-        else:
-            raise RuntimeError("image or mask is not a numpy array or list.")
-        
-    def load_transfrom_data(self):
-        if self.load:
-            img_files = []
-            mask_files = []
-            for ext in ["png", "jpg", "jpeg", "JPG", "JPEG", "PNG"]:
-                img_files.extend(self.img_ld_dir.glob(f"*.{ext}"))
-                mask_files.extend(self.mask_ld_dir.glob(f"*.{ext}"))
-            if len(img_files) != len(mask_files):
-                raise ValueError("Number of input images and masks do not match." f"{len(img_files)} images and {len(mask_files)} masks found.")
-            while self.count > 0:
-                for img_file in img_files:
-                    image = cv2.imread(str(img_file))
-                    mask_file = self.mask_ld_dir / (img_file.stem + self.mask_suffix + ".png")
-                    # print(f"Loading {img_file} and {mask_file}")
-                    mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
-                    mask = (mask / 255).round().astype(np.uint8) * 255  # Ensure mask is in the correct format
-                    # print(f"Image shape: {image.shape}, Mask shape: {mask.shape}")
-                    yield self.apply_transforms(image, mask), (img_file, mask_file)
-                self.count -= 1
-        else:
-            raise RuntimeError("Load mode is not enabled. Cannot load data.")
-        
-
 
 if __name__ == "__main__":
     img = cv2.imread('test/imgs/0.png')

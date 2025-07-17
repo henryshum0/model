@@ -1,37 +1,38 @@
 from pprint import pprint
-import os
+import torch
 from datetime import datetime
 
 from data import data_generation as D
 
 class Config:
-    load = False
-    model = 'unet' #Options: 'deepcrack', 'unet', 'attention_unet', 'segformer', 'hnet' case insensitive
     now = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    name = f'{model}_{now}'
-
     gpu_id = '0'
     
-    #<-- path settigs -->
+    load = False
+    resume = False
     
+    model = 'unet' #Options: 'deepcrack', 'unet', 'attention_unet', 'segformer', 'hnet' case insensitive
+    model_id = f"{model}-{now}"
+
+    #<--------------- path settigs ----------------->
     # image path
-    img_tr_dir = 'data/crop_img_tr'
-    img_val_dir = 'data/crop_img_val'
-    img_test_dir = 'data/crop_img_test'
-    mask_tr_dir = 'data/crop_msk_tr'
-    mask_val_dir = 'data/crop_msk_val'
-    mask_test_dir = 'data/crop_msk_test'
+    img_tr_dir = 'data/img_tr'
+    img_val_dir = 'data/img_val'
+    img_test_dir = 'data/img_test'
+    mask_tr_dir = 'data/mask_tr'
+    mask_val_dir = 'data/mask_val'
+    mask_test_dir = 'data/mask_test'
     
     #checkpoint paths
-    checkpoint_path = f'checkpoints/{model}/{now}'
-    
+    checkpoint_save_dir = f'checkpoints/{model}/{model_id}'
+    checkpoint_load_path = 'test.pth'
+    checkpoint_resume_path = ''
     #logger paths
-    log_dir = f'log/{model}/{now}'
-    #//// path settigs ////
+    log_dir_train = f'log/train/{model}/{model_id}'
+    log_dir_pred = f'log/pred/{model}/{model_id}'
+    #<---------------------------------------------->
     
-    
-
-    # <-- preprocessing settings -->
+    # <----------- preprocessing settings ---------->
     target_width = 448
     target_height = 448
     target_size = (target_width, target_height)
@@ -43,31 +44,55 @@ class Config:
     ]
     transforms_val = [D.Resize(target_size)]
     transforms_test = [D.Resize(target_size)]
-    #/// preprocessing settings ///
+    #<-------------------------------------------->
    
-    #<-- training settings -->
-    optimizer = 'rmsprop'  # Options: 'adam', 'sgd', 'rmsprop', 'none'
-    momentum = 0.999
-    weight_decay = 1e-4
-    scheduler = 'plateau'  # Options: 'step', 'cosine', 'plateau', 'nones
-    plateau_mode = 'max' #Options: 'min', 'max'
-    
+    #<----------- training settings -------------->
     epoch = 500
-    pretrained_model = ''  # Path to the pretrained model
     lr = 1e-4
+    loss = ['bce', 'dice'] # Options: 'bce', 'dice', 'focal'
     train_batch_size = 4
     val_batch_size = 4
     test_batch_size = 4
     
     val_after_epoch = 1 # Validate after every n epochs
     save_after_epoch = 1 # save after every n epochs
-    #/// training settings ///
+    #<-------------------------------------------->
     
-    #<-- loss settings -->
-    use_dice_loss = False #Whether to use Dice Loss
-    use_focal_loss = False  # Whether to use Focal Loss
-    use_bce_loss = True  # Whether to use Binary Cross-Entropy Loss
+    #<----------- optimizer settings ------------->
+    optimizer = 'rmsprop'  # Options: 'adam', 'sgd', 'rmsprop', 'none'
+    # Adam optimizer settingss
+    adam_weight_decay = 1e-4
+    
+    # SGD settings
+    sgd_momentum = 0.9
+    sgd_weight_decay = 1e-4
+    
+    # RMSprop settings
+    rmsprop_weight_decay = 1e-4
+    rmsprop_momentum = 0.999
+    #<-------------------------------------------->
+    
+    #<----------- scheduler settings ------------->
+    scheduler = 'plateau'  # Options: 'step', 'cosine', 'plateau', 'nones
+    
+    # StepLR scheduler settings
+    step_size = 20
+    step_gamma = 0.1  
+    
+    # CosineAnnealingLR scheduler settings
+    consine_T_max = 50  # Maximum number of iterations for cosine annealing
+    
+    # ReduceLROnPlateau scheduler settings
+    plateau_mode = 'max' #Options: 'min', 'max'
+    plateau_factor = 0.5
+    plateau_patience = 10
+    #<-------------------------------------------->
+    
+    #<-------------- loss settings --------------->
     reduction = 'mean'  # Options: 'mean', 'sum'
+    
+    #bcd parameters
+    pos_weight=torch.tensor(10.0) # Weight for positive examples in BCE loss
     
     #focal loss parameters
     focal_alpha = 0.75  # Weight for positive examples in Focal Loss
@@ -75,14 +100,7 @@ class Config:
     focal_beta = 1.0   # Global scaling factor for the focal term
     pos_pixel_weight = 1  # Legacy parameter, used when use_focal_loss = False
     acc_sigmoid_th = 0.5
-    #/// loss settings ///
-    
-    
-    # checkpointer
-    save_format = ''
-    save_acc = -1
-    save_pos_acc = -1    # Model configuration
-    # model_type = 'deepcrack'  # Options: 'deepcrack', 'unet', 'attention_unet', 'segformer', 'hnet'
+    #<-------------------------------------------->
     
     
     # SegFormer-specific configuration
