@@ -47,6 +47,9 @@ def main():
     
     for epoch in range(1, cfg.epoch+1):
         epoch_loss = 0.0
+        bce_loss = 0.0
+        dice_loss = 0.0
+        focal_loss = 0.0
         print(f"Epoch {epoch}/{cfg.epoch}")
         
         #training round
@@ -64,12 +67,11 @@ def main():
                 # Train the model
                 log_loss = trainer.train_op(images, masks)
                 
-                # Log the training loss
-                logger.add_scalar('train/loss', log_loss['total_loss'], global_step)    
-                for tag, value in log_loss.items():
-                    logger.add_scalar(f'train/{tag}', value, global_step)
+                # get the total losses for each batch
                 epoch_loss += log_loss['total_loss']
-                
+                bce_loss += log_loss.get('bce_loss', 0.0)
+                dice_loss += log_loss.get('dice_loss', 0.0)
+                focal_loss += log_loss.get('focal_loss', 0.0)
                 #set progress bar after each batch
                 pbar.set_postfix({'loss(batch)': log_loss['total_loss']})
                 pbar.update(1)
@@ -79,11 +81,18 @@ def main():
             avg_epoch_loss = epoch_loss / len(loader_train)
             # Set the average loss for the epoch
             pbar.set_postfix({'loss_avg(epoch)': avg_epoch_loss})
+            # log the average loss for the epoch
             logger.add_scalar('train/epoch_loss', avg_epoch_loss, epoch)
+            logger.add_scalar('train/epoch_bce_loss', bce_loss / len(loader_train), epoch)
+            logger.add_scalar('train/epoch_dice_loss', dice_loss / len(loader_train), epoch)
+            logger.add_scalar('train/epoch_focal_loss', focal_loss / len(loader_train), epoch)
         pbar.close()
         
         # Validation round
         val_loss = 0.0
+        val_bce_loss = 0.0
+        val_dice_loss = 0.0
+        val_focal_loss = 0.0
         if epoch % cfg.val_after_epoch == 0:
             with torch.no_grad():
                 with tqdm(total=len(loader_val), desc=f"Validation") as pbar:
@@ -94,7 +103,9 @@ def main():
                         
                         log_loss = trainer.val_op(images, masks)
                         val_loss += log_loss['total_loss']
-                        
+                        val_bce_loss += log_loss.get('bce_loss', 0.0)
+                        val_dice_loss += log_loss.get('dice_loss', 0.0)
+                        val_focal_loss += log_loss.get('focal_loss', 0.0)
                         # progress bar for every batch
                         pbar.set_postfix({'val_loss(batch)': log_loss['total_loss']})
                         pbar.update(1)
@@ -102,7 +113,12 @@ def main():
                     #progress bar for the whole validation round    
                     pbar.set_postfix({'val_loss_avg(epoch)': val_loss / len(loader_val)})
                     pbar.close()
+                    
+        # log the average validation loss for the epoch
         avg_val_loss = val_loss / len(loader_val)
+        logger.add_scalar('val/epoch_bce_loss', val_bce_loss / len(loader_val), epoch)
+        logger.add_scalar('val/epoch_dice_loss', val_dice_loss / len(loader_val), epoch)
+        logger.add_scalar('val/epoch_focal_loss', val_focal_loss / len(loader_val), epoch)
         logger.add_scalar('val/epoch_loss', avg_val_loss, epoch)
 
         #save the model checkpoint

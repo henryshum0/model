@@ -1,6 +1,5 @@
 from pprint import pprint
 import os
-import setproctitle
 from datetime import datetime
 
 from data import data_generation as D
@@ -12,8 +11,6 @@ class Config:
     name = f'{model}_{now}'
 
     gpu_id = '0'
-
-    setproctitle.setproctitle("%s" % name)
     
     #<-- path settigs -->
     
