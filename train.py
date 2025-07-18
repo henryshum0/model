@@ -4,16 +4,16 @@ from config import Config
 from tqdm import tqdm
 from utility.load_save import load_from_cfg, save, resume
 
-def train(cfg:Config, train_type:str='fresh', **kwargs):
+def train(cfg:Config, device, train_type:str='fresh', **kwargs):
     # getting the required modules for training
     if train_type.lower() == 'load':
         pass
     elif train_type.lower() == 'resume':
-        settings = resume(cfg, model_state_dict=kwargs['model_state_dict'],
+        settings = resume(cfg=cfg, device=device, model_state_dict=kwargs['model_state_dict'],
                           optimizer_state_dict=kwargs['optimizer_state_dict'],
                           scheduler_state_dict=kwargs['scheduler_state_dict'])
     elif train_type.lower() == 'fresh':
-        settings = load_from_cfg(cfg)
+        settings = load_from_cfg(cfg=cfg, device=device)
     else:
         raise ValueError(f"Invalid train_type: {train_type}. Use 'load', 'resume', or 'fresh'.")
     dataset_train = settings['dataset_train']
@@ -39,7 +39,7 @@ def train(cfg:Config, train_type:str='fresh', **kwargs):
     print(f"Logger directory: {cfg.log_dir_train}")
     print(f"Training dataset size: {len(dataset_train)}")
     print(f"Validation dataset size: {len(dataset_val)}")
-    print(f"Training on device: {cfg.device}")
+    print(f"Training on device: {device}")
 
     # training loop
     try:
@@ -60,8 +60,8 @@ def train(cfg:Config, train_type:str='fresh', **kwargs):
                     assert masks.shape[1] == model.n_classes, \
                         f"Expected {model.n_classes} classes, got {masks.shape[1]}"
                 
-                    images = images.to(cfg.device)
-                    masks = masks.to(cfg.device)
+                    images = images.to(device)
+                    masks = masks.to(device)
                     
                     # Train the model
                     log_loss = trainer.train_op(images, masks)
@@ -97,8 +97,8 @@ def train(cfg:Config, train_type:str='fresh', **kwargs):
                     with tqdm(total=len(loader_val), desc=f"Validation") as pbar:
                         for batch in loader_val:
                             images, masks = batch['image'], batch['mask']
-                            images = images.to(cfg.device)
-                            masks = masks.to(cfg.device)
+                            images = images.to(device)
+                            masks = masks.to(device)
                             
                             log_loss = trainer.val_op(images, masks)
                             val_loss += log_loss['total_loss']

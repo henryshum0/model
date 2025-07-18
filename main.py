@@ -4,18 +4,19 @@ from argparse import ArgumentParser
 from pathlib import Path
 import torch
 def main():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     args = get_args()
     if args.action == 'fresh':
         cfg = Config()
-        train(cfg, train_type='fresh')
+        
+        train(cfg=cfg,device=device, train_type='fresh')
     elif args.action == 'resume':
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if args.load:
             checkpoint_path = Path(args.load)
             if not checkpoint_path.exists():
                 raise FileNotFoundError(f"Checkpoint file {checkpoint_path} does not exist.")
             checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-            train(cfg=checkpoint['config'], train_type='resume', **checkpoint)
+            train(cfg=checkpoint['config'], device = device, train_type='resume', **checkpoint)
             
 
 

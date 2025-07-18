@@ -7,8 +7,7 @@ from data import data_generation as D
 class Config:
     def __init__(self):
         self.now = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self.device = torch.device(f'cuda:0' if torch.cuda.is_available() else 'cpu')
-
+        
         #<-------------- model settings ---------------->
         self.model = 'unet' #Options: 'deepcrack', 'unet', 'attention_unet', 'segformer', 'hnet' case insensitive
         self.model_id = f"{self.model}-{self.now}"  #model id must not be constant expression, i.e. not changing
@@ -99,7 +98,7 @@ class Config:
         self.reduction = 'mean'  # Options: 'mean', 'sum'
     
         #bcd parameters
-        self.bcd_pos_weight=torch.tensor([10]).to(self.device) # Weight for positive examples in BCE loss
+        self.bcd_pos_weight=[10] # Weight for positive examples in BCE loss
     
         #focal loss parameters
         self.focal_alpha = 0.75  # Weight for positive examples in Focal Loss
