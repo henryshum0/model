@@ -1,59 +1,55 @@
 import torch
 from pathlib import Path
-from config import Config as cfg
+from config import Config
 from tqdm import tqdm
-from load_save import load_from_cfg, save, resume
+from utility.load_save import load_from_cfg, save, resume
 
-def main():
+def train(cfg:Config, train_type:str='fresh', **kwargs):
     # getting the required modules for training
-    if cfg.load:
+    if train_type.lower() == 'load':
         pass
-    elif cfg.resume:
-        settings = resume(cfg.checkpoint_load_path)
+    elif train_type.lower() == 'resume':
+        settings = resume(cfg, model_state_dict=kwargs['model_state_dict'],
+                          optimizer_state_dict=kwargs['optimizer_state_dict'],
+                          scheduler_state_dict=kwargs['scheduler_state_dict'])
+    elif train_type.lower() == 'fresh':
+        settings = load_from_cfg(cfg)
     else:
-        settings = load_from_cfg()
-    model_id = settings['model_id']
+        raise ValueError(f"Invalid train_type: {train_type}. Use 'load', 'resume', or 'fresh'.")
     dataset_train = settings['dataset_train']
     dataset_val = settings['dataset_val']
     loader_train = settings['loader_train']
     loader_val = settings['loader_val']
     model = settings['model']
-    model_settings = settings['model_settings']
     logger = settings['logger']
-    logger_dir = settings['logger_dir']
     optimizer = settings['optimizer']
-    optimizer_settings = settings['optimizer_settings']
     scheduler = settings['scheduler']
-    scheduler_settings = settings['scheduler_settings']
     trainer = settings['trainer']
-    epoch_trained = settings['epoch_trained']
-    global_step = settings['global_step']
-    checkpoint_save_dir = settings['checkpoint_save_dir']
-    training_settings = settings['training_settings']
-    loss_settings = settings['loss_settings']
     
     #print training configuration
-    print(f"Training on device: {cfg.device}")
+    print(f"Model ID: {cfg.model_id}")
+    print(f"Model type: {cfg.model}")
+    print(f"Training type: {train_type}")
+    print(f"Epoch: {cfg.epoch}")
+    print(f"lr: {cfg.lr}")
+    print(f"Loss functions: {cfg.loss}")
+    print(f"Optimizer: {cfg.optimizer}")
+    print(f"Scheduler: {cfg.scheduler}")
+    print(f"Checkpoint will be saved to: {cfg.checkpoint_save_dir}")
+    print(f"Logger directory: {cfg.log_dir_train}")
     print(f"Training dataset size: {len(dataset_train)}")
     print(f"Validation dataset size: {len(dataset_val)}")
-    for key, value in training_settings.items():
-        print(f"{key}: {value}")
-    print(f"Loss functions used: {loss_settings['loss_used']}")
-    print(f"Model type: {model_settings['model_type']}")
-    print(f"Optimizer: {optimizer_settings['type']} parameters: {optimizer_settings['params']}")
-    print(f"Scheduler: {scheduler_settings['type']} parameters: {scheduler_settings['params']}")
-    print(f"Checkpoint will be saved to: {checkpoint_save_dir}")
-    print(f"Logger directory: {logger_dir}")
-    
-    
+    print(f"Training on device: {cfg.device}")
+
     # training loop
     try:
-        for epoch in range(epoch_trained, training_settings['epoch']+1):
+        global_step = cfg.global_step
+        for epoch in range(cfg.epoch_trained, cfg.epoch+1):
             epoch_loss = 0.0
             bce_loss = 0.0
             dice_loss = 0.0
             focal_loss = 0.0
-            print(f"Epoch {epoch}/{training_settings['epoch']}")
+            print(f"Epoch {epoch}/{cfg.epoch}")
             
             #training round
             with tqdm(total=len(loader_train), desc=f"Training") as pbar:
@@ -127,17 +123,10 @@ def main():
             #save the model checkpoint
             if epoch % cfg.save_after_epoch == 0:
                 save(
-                    model_id,
+                    cfg,
                     model.state_dict(), 
                     optimizer.state_dict(),
                     scheduler.state_dict(),
-                    model_settings, 
-                    optimizer_settings, 
-                    scheduler_settings, 
-                    training_settings,
-                    loss_settings,
-                    logger_dir, 
-                    checkpoint_save_dir,
                     epoch, 
                     global_step
                 )
@@ -146,21 +135,16 @@ def main():
     except KeyboardInterrupt:
         print("Training interrupted. Saving the model...")
         save(
-            model_id,
+            cfg,
             model.state_dict(), 
             optimizer.state_dict(),
             scheduler.state_dict(),
-            model_settings, 
-            optimizer_settings, 
-            scheduler_settings, 
-            training_settings,
-            loss_settings,
-            logger_dir, 
-            checkpoint_save_dir,
             epoch, 
-            global_step, 
+            global_step
         )
         print("Model saved. Exiting...")
-        
-
-main()
+      
+      
+if __name__ == "__main__":  
+    cfg = Config()
+    train(cfg)
