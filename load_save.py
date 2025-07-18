@@ -16,11 +16,11 @@ def load_from_cfg():
     '''
     Load training settings using the configuration file
     '''
-    device = torch.device(f'cuda:{cfg.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    
     dataset_train, dataset_val = get_datasets()
     loader_train, loader_val = get_loaders(dataset_train, dataset_val, cfg.train_batch_size, cfg.val_batch_size)
     model, model_settings = get_model(cfg.model, dataset_train.get_n_classes())
-    model.to(device)
+    model.to(cfg.device)
     logger = get_logger(cfg.log_dir_train)
     optimizer, optimizer_settings = get_optimizer_settings(  
         cfg.optimizer, model,
@@ -46,7 +46,7 @@ def load_from_cfg():
         focal_alpha=cfg.focal_alpha,
         focal_gamma=cfg.focal_gamma,
         focal_beta=cfg.focal_beta,
-        pos_weight=cfg.pos_weight
+        bcd_pos_weight=cfg.bcd_pos_weight
     )
     
     trainer = get_trainer(
@@ -85,7 +85,6 @@ def load_from_cfg():
         'trainer': trainer,
         'epoch_trained': 0,
         'global_step':0,
-        'device':device,
         'training_settings': training_settings,
         'loss_settings': loss_settings,
     }
@@ -95,12 +94,12 @@ def load(checkpoint_path):
     Load the basic model and settings for prediction or training
     '''
     checkpoint = torch.load(checkpoint_path, map_location='cpu')
-    device = torch.device(f'cuda:{cfg.gpu_id}' if torch.cuda.is_available() else 'cpu')
     model, model_settings = get_model(
         checkpoint['model_settings']['model_type'], 
         checkpoint['model_settings']['n_classes']
     )
     model.load_state_dict(checkpoint['model_state_dict'])
+    model.to(cfg.device)
     
 
 def resume(checkpoint_path):
@@ -109,7 +108,7 @@ def resume(checkpoint_path):
     saved in the checkpoint i.e. model, optimizer, scheduler, etc.
     '''
     checkpoint = torch.load(checkpoint_path, map_location='cpu')
-    device = torch.device(f'cuda:{cfg.gpu_id}' if torch.cuda.is_available() else 'cpu')
+    
     dataset_train, dataset_val = get_datasets()
     loader_train, loader_val = get_loaders(dataset_train, dataset_val, cfg.train_batch_size, cfg.val_batch_size)
     model, model_settings = get_model(
@@ -117,7 +116,7 @@ def resume(checkpoint_path):
         checkpoint['model_settings']['n_classes']
     )
     model.load_state_dict(checkpoint['model_state_dict'])
-    model.to(device)
+    model.to(cfg.device)
     logger = get_logger(checkpoint['logger_dir'])
     
     optimizer, optimizer_settings = get_optimizer_settings(
@@ -162,7 +161,6 @@ def resume(checkpoint_path):
         'trainer': trainer,
         'epoch_trained': checkpoint['epoch_trained'],
         'global_step': checkpoint['global_step'],
-        'device': device,
         'training_settings': checkpoint['training_settings'],
         'loss_settings': loss_settings
     }
@@ -311,7 +309,7 @@ def get_loss_criterion(loss_used: list[str], **parameters):
     if 'focal' in loss_used:
         criterions.append(loss.FocalLoss(alpha=parameters['focal_alpha'], gamma=parameters['focal_gamma'], beta=parameters['focal_beta'], reduction=parameters['reduction']))
     if 'bce' in loss_used:
-        criterions.append(nn.BCEWithLogitsLoss(reduction=parameters['reduction'], pos_weight=parameters['pos_weight']))
+        criterions.append(nn.BCEWithLogitsLoss(reduction=parameters['reduction'], pos_weight=parameters['bcd_pos_weight']))
     if loss_used == []:
         raise ValueError("At least one loss criterion must be specified")
     if len(criterions) == 0:

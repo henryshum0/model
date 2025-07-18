@@ -5,6 +5,7 @@ from tqdm import tqdm
 from load_save import load_from_cfg, save, resume
 
 def main():
+    # getting the required modules for training
     if cfg.load:
         pass
     elif cfg.resume:
@@ -25,14 +26,14 @@ def main():
     scheduler = settings['scheduler']
     scheduler_settings = settings['scheduler_settings']
     trainer = settings['trainer']
-    device = settings['device']
     epoch_trained = settings['epoch_trained']
     global_step = settings['global_step']
     checkpoint_save_dir = settings['checkpoint_save_dir']
     training_settings = settings['training_settings']
     loss_settings = settings['loss_settings']
     
-    print(f"Training on device: {device}")
+    #print training configuration
+    print(f"Training on device: {cfg.device}")
     print(f"Training dataset size: {len(dataset_train)}")
     print(f"Validation dataset size: {len(dataset_val)}")
     for key, value in training_settings.items():
@@ -44,6 +45,8 @@ def main():
     print(f"Checkpoint will be saved to: {checkpoint_save_dir}")
     print(f"Logger directory: {logger_dir}")
     
+    
+    # training loop
     try:
         for epoch in range(epoch_trained, training_settings['epoch']+1):
             epoch_loss = 0.0
@@ -61,8 +64,8 @@ def main():
                     assert masks.shape[1] == model.n_classes, \
                         f"Expected {model.n_classes} classes, got {masks.shape[1]}"
                 
-                    images = images.to(device)
-                    masks = masks.to(device)
+                    images = images.to(cfg.device)
+                    masks = masks.to(cfg.device)
                     
                     # Train the model
                     log_loss = trainer.train_op(images, masks)
@@ -98,8 +101,8 @@ def main():
                     with tqdm(total=len(loader_val), desc=f"Validation") as pbar:
                         for batch in loader_val:
                             images, masks = batch['image'], batch['mask']
-                            images = images.to(device)
-                            masks = masks.to(device)
+                            images = images.to(cfg.device)
+                            masks = masks.to(cfg.device)
                             
                             log_loss = trainer.val_op(images, masks)
                             val_loss += log_loss['total_loss']
@@ -138,9 +141,10 @@ def main():
                     epoch, 
                     global_step
                 )
+
+    # stop the training                
     except KeyboardInterrupt:
         print("Training interrupted. Saving the model...")
-        
         save(
             model_id,
             model.state_dict(), 

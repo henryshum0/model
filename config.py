@@ -6,7 +6,7 @@ from data import data_generation as D
 
 class Config:
     now = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    gpu_id = '0'
+    device = torch.device(f'cuda:0' if torch.cuda.is_available() else 'cpu')
     
     load = False
     resume = False
@@ -92,7 +92,7 @@ class Config:
     reduction = 'mean'  # Options: 'mean', 'sum'
     
     #bcd parameters
-    pos_weight=torch.tensor(10.0) # Weight for positive examples in BCE loss
+    bcd_pos_weight=torch.tensor([10]).to(device) # Weight for positive examples in BCE loss
     
     #focal loss parameters
     focal_alpha = 0.75  # Weight for positive examples in Focal Loss

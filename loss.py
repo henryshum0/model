@@ -76,10 +76,8 @@ class DiceLoss(nn.Module):
         dice = (intersection + self.epsilon) / denominator
         loss = 1 - dice
 
-        if self.reduction == 'mean':
-            return loss.mean()
-        elif self.reduction == 'sum':
+        if self.reduction == 'sum':
             return loss.sum()
-        else:  # 'none'
-            return loss
+        else:
+            return loss.mean()
     
